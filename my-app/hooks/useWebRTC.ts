@@ -113,5 +113,57 @@ export const useWebRTC = (roomId: string, userId: string) => {
         }
     };
 
-    return { localStream, remoteStream, messages, sendMessage };
+    // Switch to screen sharing
+    const startScreenShare = useCallback(async () => {
+        try {
+            const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true });
+            const screenTrack = screenStream.getVideoTracks()[0];
+
+            if (peerConnectionRef.current && localStream) {
+                // Replace the video track in the peer connection
+                const sender = peerConnectionRef.current.getSenders().find(s => s.track?.kind === 'video');
+                if (sender) {
+                    sender.replaceTrack(screenTrack);
+                }
+            }
+
+            // When screen sharing stops, switch back to camera
+            screenTrack.onended = () => {
+                stopScreenShare();
+            };
+
+            // Update local stream for UI
+            setLocalStream(prev => {
+                if (!prev) return screenStream;
+                const newStream = new MediaStream([
+                    screenTrack,
+                    ...prev.getAudioTracks()
+                ]);
+                return newStream;
+            });
+        } catch (err) {
+            console.error("Error sharing screen:", err);
+        }
+    }, [peerConnectionRef, localStream]);
+
+    // Switch back to camera
+    const stopScreenShare = useCallback(async () => {
+        try {
+            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const cameraTrack = cameraStream.getVideoTracks()[0];
+
+            if (peerConnectionRef.current) {
+                const sender = peerConnectionRef.current.getSenders().find(s => s.track?.kind === 'video');
+                if (sender) {
+                    sender.replaceTrack(cameraTrack);
+                }
+            }
+
+            setLocalStream(cameraStream);
+        } catch (err) {
+            console.error("Error switching back to camera:", err);
+        }
+    }, [peerConnectionRef]);
+
+    return { localStream, remoteStream, messages, sendMessage, startScreenShare, stopScreenShare };
 };

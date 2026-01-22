@@ -3,10 +3,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useWebRTC } from "@/hooks/useWebRTC";
 
 export default function Home() {
   const [roomId, setRoomId] = useState("");
   const router = useRouter();
+  const userId = "some-user-id"; // Replace with actual user ID logic
+  const { localStream, remoteStream, startScreenShare, stopScreenShare } = useWebRTC(roomId, userId);
 
   const handleJoin = () => {
     if (roomId.trim()) {
@@ -36,6 +39,14 @@ export default function Home() {
           <Button onClick={handleJoin} className="w-full" disabled={!roomId}>
             Join Room
           </Button>
+          <div className="flex space-x-4">
+            <Button onClick={startScreenShare} className="w-full">
+              Share Screen
+            </Button>
+            <Button onClick={stopScreenShare} className="w-full">
+              Stop Sharing
+            </Button>
+          </div>
         </div>
       </div>
     </div>
