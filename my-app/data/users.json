@@ -1,0 +1,18 @@
+{
+  "users": [
+    {
+      "email": "tayyabalirashid3@gmail.com",
+      "password": "$2b$10$CradA0RH0jdzKtsUQ02rIe/Nhnk9IgpoO2u2eqCKT/nzju7N60g5i",
+      "name": "tayyab",
+      "id": "1769460817543",
+      "createdAt": "2026-01-26T20:53:37.543Z"
+    },
+    {
+      "email": "ahmad@gmail.com",
+      "password": "$2b$10$99Fq.txVtMb/4kKgMoM2Ce5cp3hwTbn7r8/a6gutIZ9gFEIG7mmra",
+      "name": "ahmad ",
+      "id": "1769460834053",
+      "createdAt": "2026-01-26T20:53:54.053Z"
+    }
+  ]
+}

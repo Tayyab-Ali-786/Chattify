@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import { generateKeyPair, exportPublicKey, importPublicKey, deriveSharedSecret, encrypt, decrypt, encryptBinary, decryptBinary } from "@/lib/encryption";
 
 const SOCKET_URL = "http://localhost:3001";
 
@@ -25,10 +26,17 @@ export const useWebRTC = (roomId: string, userName: string) => {
     const [messages, setMessages] = useState<{ from: string; message: string; type: 'text' | 'file'; fileUrl?: string; fileName?: string }[]>([]);
     const [remoteDrawingData, setRemoteDrawingData] = useState<DrawingData | null>(null);
     const [remoteWhiteboardOpen, setRemoteWhiteboardOpen] = useState(false);
+    const [isEncrypted, setIsEncrypted] = useState(false);
+
     const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
     const localStreamRef = useRef<MediaStream | null>(null);
     const candidatesQueue = useRef<RTCIceCandidate[]>([]);
     const isProcessingQueue = useRef(false);
+
+    // Encryption keys
+    const encryptionKeyRef = useRef<CryptoKey | null>(null);
+    const privateKeyRef = useRef<CryptoKey | null>(null);
+    const publicKeyRef = useRef<CryptoKey | null>(null);
 
     const processCandidatesQueue = async () => {
         if (!peerConnectionRef.current || !peerConnectionRef.current.remoteDescription || isProcessingQueue.current) return;
@@ -53,12 +61,19 @@ export const useWebRTC = (roomId: string, userName: string) => {
         };
         channel.binaryType = "arraybuffer";
 
-        channel.onmessage = (event) => {
+        channel.onmessage = async (event) => {
             const { data } = event;
 
             if (typeof data === 'string') {
                 try {
-                    const parsed = JSON.parse(data);
+                    let parsed = JSON.parse(data);
+
+                    // Decrypt if encrypted
+                    if (parsed.encrypted && encryptionKeyRef.current) {
+                        const decrypted = await decrypt(parsed.data, encryptionKeyRef.current);
+                        parsed = JSON.parse(decrypted);
+                    }
+
                     if (parsed.type === 'file-meta') {
                         incomingFileMetaRef.current = parsed;
                         incomingFileBufferRef.current = [];
@@ -266,6 +281,21 @@ export const useWebRTC = (roomId: string, userName: string) => {
         const handleUserJoined = async ({ id, name }: { id: string, name: string }) => {
             console.log("User joined:", id, name);
             setRemoteUserName(name || "Unknown User");
+
+            // Generate encryption keys
+            try {
+                const keyPair = await generateKeyPair();
+                privateKeyRef.current = keyPair.privateKey;
+                publicKeyRef.current = keyPair.publicKey;
+
+                // Export and send public key
+                const exportedKey = await exportPublicKey(keyPair.publicKey);
+                socket.emit("public-key", { to: id, publicKey: exportedKey });
+                console.log("🔐 Sent public key for encryption");
+            } catch (error) {
+                console.error("Error generating encryption keys:", error);
+            }
+
             const pc = createPeerConnection(true);
             peerConnectionRef.current = pc;
 
