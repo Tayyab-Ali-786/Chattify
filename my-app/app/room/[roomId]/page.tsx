@@ -185,19 +185,19 @@ export default function Room() {
     }, [remoteDrawingData]);
 
     return (
-        <div className="flex flex-col h-screen bg-gray-950 text-white overflow-hidden font-sans">
+        <div className="flex flex-col h-screen bg-gradient-to-br from-indigo-950 via-purple-950 to-pink-950 text-white overflow-hidden font-sans relative">
             {/* Header */}
-            <header className="px-6 py-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center shrink-0 z-10 shadow-md">
+            <header className="px-6 py-4 bg-gradient-to-r from-indigo-900/60 via-purple-900/60 to-pink-900/60 backdrop-blur-xl border-b border-cyan-500/20 flex justify-between items-center shrink-0 z-10 shadow-lg shadow-purple-900/20">
                 <div className="flex items-center gap-4">
-                    <div className="bg-blue-600 p-2 rounded-lg">
+                    <div className="bg-gradient-to-br from-cyan-500 to-purple-500 p-2.5 rounded-xl shadow-lg shadow-cyan-500/20">
                         <VideoIcon />
                     </div>
                     <div>
-                        <h1 className="text-lg font-bold tracking-wide">Room: <span className="text-blue-400">{roomId}</span></h1>
-                        <p className="text-xs text-gray-400">Logged in as: {userName}</p>
+                        <h1 className="text-lg font-bold tracking-wide">Room: <span className="bg-gradient-to-r from-cyan-300 to-pink-300 bg-clip-text text-transparent">{roomId}</span></h1>
+                        <p className="text-xs text-cyan-200/70">Logged in as: {userName}</p>
                     </div>
                 </div>
-                <Button onClick={handleLeave} className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 gap-2">
+                <Button onClick={handleLeave} className="bg-pink-500/20 hover:bg-pink-500/30 text-pink-200 border-2 border-pink-400/30 gap-2 rounded-xl font-semibold transition-all hover:shadow-lg hover:shadow-pink-500/20">
                     <LogOutIcon /> Leave
                 </Button>
             </header>
@@ -205,7 +205,7 @@ export default function Room() {
             <div className="flex-1 flex overflow-hidden">
                 {/* Main Content */}
                 <main className="flex-1 flex flex-col p-6 gap-6 overflow-hidden relative">
-                    <div className="flex-1 relative bg-gray-900 rounded-2xl overflow-hidden border border-gray-800 shadow-2xl flex items-center justify-center group">
+                    <div className="flex-1 relative bg-gradient-to-br from-indigo-900/40 to-purple-900/40 rounded-3xl overflow-hidden border-2 border-cyan-500/20 shadow-2xl shadow-purple-900/30 flex items-center justify-center group backdrop-blur-sm">
                         {/* Remote Video */}
                         {remoteStream ? (
                             <div className="relative w-full h-full">
@@ -215,21 +215,21 @@ export default function Room() {
                                     playsInline
                                     className="w-full h-full object-contain bg-black"
                                 />
-                                <div className="absolute top-4 left-4 bg-black/60 backdrop-blur px-3 py-1 rounded-full text-sm font-medium border border-white/10">
+                                <div className="absolute top-4 left-4 bg-gradient-to-r from-cyan-500/80 to-purple-500/80 backdrop-blur-md px-4 py-2 rounded-full text-sm font-bold border-2 border-cyan-300/30 shadow-lg shadow-cyan-500/20">
                                     {remoteUserName}
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center gap-4 text-gray-500 animate-pulse">
-                                <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center">
-                                    <span className="text-2xl">...</span>
+                            <div className="flex flex-col items-center gap-4 text-purple-300/60 animate-pulse">
+                                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border-2 border-cyan-400/30 flex items-center justify-center backdrop-blur-sm">
+                                    <span className="text-3xl">...</span>
                                 </div>
-                                <p>Waiting for others to join...</p>
+                                <p className="text-cyan-200/70 font-medium">Waiting for others to join...</p>
                             </div>
                         )}
 
                         {/* Local Video (Floating) */}
-                        <div className="absolute bottom-6 right-6 w-64 aspect-video bg-gray-800 rounded-xl overflow-hidden border-2 border-gray-700 shadow-2xl transition-all hover:scale-105 z-20">
+                        <div className="absolute bottom-6 right-6 w-64 aspect-video bg-gradient-to-br from-indigo-900/60 to-purple-900/60 rounded-2xl overflow-hidden border-2 border-cyan-400/40 shadow-2xl shadow-cyan-500/20 transition-all hover:scale-105 hover:border-cyan-300/60 z-20 backdrop-blur-sm">
                             <video
                                 ref={localVideoRef}
                                 autoPlay
@@ -237,7 +237,7 @@ export default function Room() {
                                 muted
                                 className="w-full h-full object-cover"
                             />
-                            <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur px-2 py-0.5 rounded text-xs border border-white/10">
+                            <div className="absolute bottom-2 right-2 bg-gradient-to-r from-cyan-500/80 to-purple-500/80 backdrop-blur-md px-3 py-1 rounded-lg text-xs font-bold border border-cyan-300/30">
                                 You
                             </div>
                         </div>
@@ -245,29 +245,29 @@ export default function Room() {
 
                     {/* Bottom Controls */}
                     <div className="flex justify-center gap-4 shrink-0 pb-2">
-                        <div className="bg-gray-900 p-2 rounded-2xl border border-gray-800 flex gap-2 shadow-lg">
-                            <Button className="rounded-xl w-12 h-12 p-0 hover:bg-gray-800 text-gray-300 hover:text-white" onClick={() => {
+                        <div className="bg-gradient-to-r from-indigo-900/60 to-purple-900/60 backdrop-blur-xl p-3 rounded-3xl border-2 border-cyan-500/20 flex gap-3 shadow-xl shadow-purple-900/30">
+                            <Button className="rounded-2xl w-12 h-12 p-0 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 hover:text-cyan-100 border-2 border-cyan-400/30 transition-all hover:shadow-lg hover:shadow-cyan-500/20" onClick={() => {
                                 if (localStream) {
                                     localStream.getAudioTracks().forEach(track => track.enabled = !track.enabled);
                                 }
                             }}>
                                 <MicIcon />
                             </Button>
-                            <Button className="rounded-xl w-12 h-12 p-0 hover:bg-gray-800 text-gray-300 hover:text-white" onClick={() => {
+                            <Button className="rounded-2xl w-12 h-12 p-0 bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 hover:text-purple-100 border-2 border-purple-400/30 transition-all hover:shadow-lg hover:shadow-purple-500/20" onClick={() => {
                                 if (localStream) {
                                     localStream.getVideoTracks().forEach(track => track.enabled = !track.enabled);
                                 }
                             }}>
                                 <VideoIcon />
                             </Button>
-                            <div className="w-px bg-gray-700 mx-1"></div>
-                            <Button className="rounded-xl h-12 px-4 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 gap-2" onClick={toggleScreenShare}>
+                            <div className="w-px bg-cyan-500/30 mx-1"></div>
+                            <Button className="rounded-2xl h-12 px-4 bg-pink-500/20 hover:bg-pink-500/30 text-pink-200 hover:text-pink-100 border-2 border-pink-400/30 gap-2 transition-all hover:shadow-lg hover:shadow-pink-500/20" onClick={toggleScreenShare}>
                                 <MonitorIcon />
-                                <span className="hidden sm:inline">Share Screen</span>
+                                <span className="hidden sm:inline font-semibold">Share Screen</span>
                             </Button>
-                            <div className="w-px bg-gray-700 mx-1"></div>
+                            <div className="w-px bg-cyan-500/30 mx-1"></div>
                             <Button
-                                className={`rounded-xl h-12 px-4 gap-2 ${isWhiteboardOpen ? 'bg-purple-600/20 text-purple-300' : 'hover:bg-purple-600/20 text-purple-400 hover:text-purple-300'}`}
+                                className={`rounded-2xl h-12 px-4 gap-2 border-2 font-semibold transition-all ${isWhiteboardOpen ? 'bg-purple-400/30 text-purple-100 border-purple-300/50 shadow-lg shadow-purple-500/30' : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 hover:text-purple-100 border-purple-400/30 hover:shadow-lg hover:shadow-purple-500/20'}`}
                                 onClick={toggleWhiteboard}
                             >
                                 <PenIcon />
@@ -279,44 +279,44 @@ export default function Room() {
 
                 {/* Whiteboard Panel */}
                 {isWhiteboardOpen && (
-                    <aside className="w-96 bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-300">
-                        <div className="p-4 border-b border-gray-800 font-semibold flex justify-between items-center">
-                            Whiteboard
-                            <span className="text-xs bg-purple-600/20 text-purple-400 px-2 py-1 rounded">Live</span>
+                    <aside className="w-96 bg-gradient-to-br from-indigo-900/50 to-purple-900/50 backdrop-blur-xl border-l-2 border-purple-500/30 flex flex-col transition-all duration-300 shadow-xl shadow-purple-900/20">
+                        <div className="p-4 border-b-2 border-purple-500/30 font-bold flex justify-between items-center">
+                            <span className="bg-gradient-to-r from-cyan-300 to-purple-300 bg-clip-text text-transparent">Whiteboard</span>
+                            <span className="text-xs bg-purple-500/30 text-purple-200 px-3 py-1 rounded-full border border-purple-400/30 font-semibold">Live</span>
                         </div>
                         <div className="flex-1 p-4 flex flex-col gap-4">
                             <canvas
                                 ref={canvasRef}
                                 width={800}
                                 height={600}
-                                className="w-full bg-white rounded-lg cursor-crosshair border-2 border-gray-700 shadow-lg"
+                                className="w-full bg-white rounded-2xl cursor-crosshair border-2 border-cyan-400/40 shadow-2xl shadow-cyan-500/20"
                                 onMouseDown={handleCanvasMouseDown}
                                 onMouseMove={handleCanvasMouseMove}
                                 onMouseUp={handleCanvasMouseUp}
                                 onMouseLeave={handleCanvasMouseUp}
                             />
-                            <div className="flex flex-col gap-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                            <div className="flex flex-col gap-3 p-4 bg-gradient-to-br from-indigo-800/50 to-purple-800/50 rounded-2xl border-2 border-cyan-500/20 backdrop-blur-sm">
                                 <div className="flex items-center gap-3">
-                                    <label className="text-sm text-gray-400 font-medium">Color:</label>
+                                    <label className="text-sm text-cyan-200 font-semibold">Color:</label>
                                     <input
                                         type="color"
                                         value={drawColor}
                                         onChange={(e) => setDrawColor(e.target.value)}
-                                        className="w-12 h-8 rounded cursor-pointer border border-gray-600"
+                                        className="w-12 h-10 rounded-lg cursor-pointer border-2 border-cyan-400/50"
                                     />
                                     <div className="flex gap-2 ml-auto">
                                         {['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00'].map(color => (
                                             <button
                                                 key={color}
                                                 onClick={() => setDrawColor(color)}
-                                                className="w-6 h-6 rounded-full border-2 border-gray-600 hover:scale-110 transition-transform"
+                                                className="w-7 h-7 rounded-full border-2 border-cyan-300/60 hover:scale-110 hover:border-cyan-200 transition-all shadow-lg"
                                                 style={{ backgroundColor: color }}
                                             />
                                         ))}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <label className="text-sm text-gray-400 font-medium">Width:</label>
+                                    <label className="text-sm text-cyan-200 font-semibold">Width:</label>
                                     <input
                                         type="range"
                                         min="1"
@@ -325,11 +325,11 @@ export default function Room() {
                                         onChange={(e) => setLineWidth(Number(e.target.value))}
                                         className="flex-1"
                                     />
-                                    <span className="text-sm text-gray-400 w-8">{lineWidth}px</span>
+                                    <span className="text-sm text-purple-200 font-bold w-10">{lineWidth}px</span>
                                 </div>
                                 <Button
                                     onClick={clearCanvas}
-                                    className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 gap-2 rounded-lg"
+                                    className="w-full bg-pink-500/20 hover:bg-pink-500/30 text-pink-200 border-2 border-pink-400/30 gap-2 rounded-xl font-semibold transition-all hover:shadow-lg hover:shadow-pink-500/20"
                                 >
                                     <TrashIcon /> Clear Canvas
                                 </Button>
@@ -341,18 +341,18 @@ export default function Room() {
 
                 {/* Chat Sidebar */}
                 {isSidebarOpen && (
-                    <aside className="w-80 bg-gray-900 border-l border-gray-800 flex flex-col transition-all duration-300">
-                        <div className="p-4 border-b border-gray-800 font-semibold flex justify-between items-center">
-                            Chat
-                            <span className="text-xs bg-gray-800 px-2 py-1 rounded text-gray-400">Live</span>
+                    <aside className="w-80 bg-gradient-to-br from-indigo-900/50 to-purple-900/50 backdrop-blur-xl border-l-2 border-cyan-500/30 flex flex-col transition-all duration-300 shadow-xl shadow-cyan-900/20">
+                        <div className="p-4 border-b-2 border-cyan-500/30 font-bold flex justify-between items-center">
+                            <span className="bg-gradient-to-r from-cyan-300 to-pink-300 bg-clip-text text-transparent">Chat</span>
+                            <span className="text-xs bg-cyan-500/30 text-cyan-200 px-3 py-1 rounded-full border border-cyan-400/30 font-semibold">Live</span>
                         </div>
                         <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-800">
                             {messages.map((msg, idx) => (
                                 <div key={idx} className={`flex flex-col ${msg.from === 'me' ? 'items-end' : 'items-start'}`}>
-                                    <div className={`p-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${msg.from === 'me' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-gray-800 text-gray-200 rounded-tl-sm'}`}>
+                                    <div className={`p-3.5 rounded-2xl max-w-[85%] text-sm shadow-lg ${msg.from === 'me' ? 'bg-gradient-to-br from-cyan-500 to-purple-500 text-white rounded-tr-sm border-2 border-cyan-300/30' : 'bg-gradient-to-br from-indigo-800/70 to-purple-800/70 text-white rounded-tl-sm border-2 border-purple-400/30 backdrop-blur-sm'}`}>
                                         {msg.type === 'file' ? (
                                             <div className="flex flex-col gap-2">
-                                                <div className="flex items-center gap-2 font-medium">
+                                                <div className="flex items-center gap-2 font-semibold">
                                                     <PaperclipIcon />
                                                     <span className="truncate max-w-37.5">{msg.fileName || "File"}</span>
                                                 </div>
@@ -360,12 +360,12 @@ export default function Room() {
                                                     <a
                                                         href={msg.fileUrl}
                                                         download={msg.fileName}
-                                                        className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs transition-colors"
+                                                        className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 px-3 py-2 rounded-xl text-xs transition-all font-semibold border border-white/20 hover:border-white/40"
                                                     >
                                                         <DownloadIcon /> Download
                                                     </a>
                                                 )}
-                                                <div className="text-[10px] opacity-70 border-t border-white/20 pt-1 mt-1">
+                                                <div className="text-[10px] opacity-80 border-t border-white/30 pt-1.5 mt-1">
                                                     {msg.message}
                                                 </div>
                                             </div>
@@ -376,14 +376,16 @@ export default function Room() {
                                 </div>
                             ))}
                             {messages.length === 0 && (
-                                <div className="h-full flex flex-col items-center justify-center text-gray-600 text-sm gap-2 opacity-50">
-                                    <span className="text-2xl">💬</span>
-                                    <p>No messages yet</p>
+                                <div className="h-full flex flex-col items-center justify-center text-purple-300/50 text-sm gap-3 opacity-60">
+                                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center border-2 border-cyan-400/30">
+                                        <span className="text-3xl">💬</span>
+                                    </div>
+                                    <p className="font-medium">No messages yet</p>
                                 </div>
                             )}
                         </div>
-                        <div className="p-4 border-t border-gray-800 bg-gray-900">
-                            <form onSubmit={handleSendMessage} className="relative flex gap-2 items-center">
+                        <div className="p-4 border-t-2 border-cyan-500/30 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 backdrop-blur-sm">
+                            <form onSubmit={handleSendMessage} className="relative flex gap-2.5 items-center">
                                 <input
                                     type="file"
                                     ref={fileInputRef}
@@ -393,20 +395,20 @@ export default function Room() {
                                 <Button
                                     type="button"
                                     onClick={handleFileClick}
-                                    className="p-2 h-10 w-10 min-w-[2.5rem] rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-all border border-gray-700"
+                                    className="p-2.5 h-11 w-11 min-w-[2.75rem] rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 hover:text-cyan-100 transition-all border-2 border-cyan-400/30 hover:shadow-lg hover:shadow-cyan-500/20"
                                 >
                                     <PaperclipIcon />
                                 </Button>
                                 <div className="relative flex-1">
                                     <input
-                                        className="w-full bg-gray-800 text-white rounded-xl pl-4 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/50 transition-all placeholder:text-gray-500"
+                                        className="w-full bg-gradient-to-r from-indigo-900/60 to-purple-900/60 text-white rounded-2xl pl-4 pr-12 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-400/50 transition-all placeholder:text-purple-300/50 border-2 border-cyan-500/20 backdrop-blur-sm font-medium"
                                         value={chatInput}
                                         onChange={(e) => setChatInput(e.target.value)}
                                         placeholder="Type a message..."
                                     />
                                     <Button
                                         type="submit"
-                                        className="absolute right-1.5 top-1.5 h-8 w-8 p-0 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center"
+                                        className="absolute right-2 top-2 h-9 w-9 p-0 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white flex items-center justify-center transition-all shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50"
                                         disabled={!chatInput.trim()}
                                     >
                                         <SendIcon />
