@@ -11,6 +11,8 @@ const VideoIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" heigh
 const MonitorIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>;
 const LogOutIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>;
 const SendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>;
+const PaperclipIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>;
+const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
 
 export default function Room() {
     const params = useParams();
@@ -19,13 +21,29 @@ export default function Room() {
     const userName = searchParams.get('name') || "Anonymous";
     const router = useRouter();
 
-    const { localStream, remoteStream, messages, sendMessage, remoteUserName, toggleScreenShare } = useWebRTC(roomId, userName);
+    const { localStream, remoteStream, messages, sendMessage, sendFile, remoteUserName, toggleScreenShare } = useWebRTC(roomId, userName);
     const [chatInput, setChatInput] = useState("");
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen] = useState(true);
 
     const localVideoRef = useRef<HTMLVideoElement>(null);
     const remoteVideoRef = useRef<HTMLVideoElement>(null);
     const chatScrollRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            sendFile(file);
+        }
+        // Reset input so same file can be selected again
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+    };
 
     useEffect(() => {
         if (chatScrollRef.current) {
@@ -70,7 +88,7 @@ export default function Room() {
                         <p className="text-xs text-gray-400">Logged in as: {userName}</p>
                     </div>
                 </div>
-                <Button onClick={handleLeave} variant="destructive" className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 gap-2">
+                <Button onClick={handleLeave} className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 gap-2">
                     <LogOutIcon /> Leave
                 </Button>
             </header>
@@ -119,14 +137,14 @@ export default function Room() {
                     {/* Bottom Controls */}
                     <div className="flex justify-center gap-4 shrink-0 pb-2">
                         <div className="bg-gray-900 p-2 rounded-2xl border border-gray-800 flex gap-2 shadow-lg">
-                            <Button variant="ghost" className="rounded-xl w-12 h-12 p-0 hover:bg-gray-800 text-gray-300 hover:text-white" onClick={() => {
+                            <Button className="rounded-xl w-12 h-12 p-0 hover:bg-gray-800 text-gray-300 hover:text-white" onClick={() => {
                                 if (localStream) {
                                     localStream.getAudioTracks().forEach(track => track.enabled = !track.enabled);
                                 }
                             }}>
                                 <MicIcon />
                             </Button>
-                            <Button variant="ghost" className="rounded-xl w-12 h-12 p-0 hover:bg-gray-800 text-gray-300 hover:text-white" onClick={() => {
+                            <Button className="rounded-xl w-12 h-12 p-0 hover:bg-gray-800 text-gray-300 hover:text-white" onClick={() => {
                                 if (localStream) {
                                     localStream.getVideoTracks().forEach(track => track.enabled = !track.enabled);
                                 }
@@ -134,7 +152,7 @@ export default function Room() {
                                 <VideoIcon />
                             </Button>
                             <div className="w-px bg-gray-700 mx-1"></div>
-                            <Button variant="ghost" className="rounded-xl h-12 px-4 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 gap-2" onClick={toggleScreenShare}>
+                            <Button className="rounded-xl h-12 px-4 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 gap-2" onClick={toggleScreenShare}>
                                 <MonitorIcon />
                                 <span className="hidden sm:inline">Share Screen</span>
                             </Button>
@@ -153,8 +171,28 @@ export default function Room() {
                             {messages.map((msg, idx) => (
                                 <div key={idx} className={`flex flex-col ${msg.from === 'me' ? 'items-end' : 'items-start'}`}>
                                     <div className={`p-3 rounded-2xl max-w-[85%] text-sm shadow-sm ${msg.from === 'me' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-gray-800 text-gray-200 rounded-tl-sm'}`}>
-                                        {/* Parse Name if format "Name: Message" */}
-                                        {msg.message}
+                                        {msg.type === 'file' ? (
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex items-center gap-2 font-medium">
+                                                    <PaperclipIcon />
+                                                    <span className="truncate max-w-37.5">{msg.fileName || "File"}</span>
+                                                </div>
+                                                {msg.fileUrl && (
+                                                    <a
+                                                        href={msg.fileUrl}
+                                                        download={msg.fileName}
+                                                        className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs transition-colors"
+                                                    >
+                                                        <DownloadIcon /> Download
+                                                    </a>
+                                                )}
+                                                <div className="text-[10px] opacity-70 border-t border-white/20 pt-1 mt-1">
+                                                    {msg.message}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            msg.message
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -166,21 +204,35 @@ export default function Room() {
                             )}
                         </div>
                         <div className="p-4 border-t border-gray-800 bg-gray-900">
-                            <form onSubmit={handleSendMessage} className="relative">
+                            <form onSubmit={handleSendMessage} className="relative flex gap-2 items-center">
                                 <input
-                                    className="w-full bg-gray-800 text-white rounded-xl pl-4 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/50 transition-all placeholder:text-gray-500"
-                                    value={chatInput}
-                                    onChange={(e) => setChatInput(e.target.value)}
-                                    placeholder="Type a message..."
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    onChange={handleFileChange}
                                 />
                                 <Button
-                                    type="submit"
-                                    size="sm"
-                                    className="absolute right-1.5 top-1.5 h-8 w-8 p-0 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center"
-                                    disabled={!chatInput.trim()}
+                                    type="button"
+                                    onClick={handleFileClick}
+                                    className="p-2 h-10 w-10 min-w-[2.5rem] rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-all border border-gray-700"
                                 >
-                                    <SendIcon />
+                                    <PaperclipIcon />
                                 </Button>
+                                <div className="relative flex-1">
+                                    <input
+                                        className="w-full bg-gray-800 text-white rounded-xl pl-4 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600/50 transition-all placeholder:text-gray-500"
+                                        value={chatInput}
+                                        onChange={(e) => setChatInput(e.target.value)}
+                                        placeholder="Type a message..."
+                                    />
+                                    <Button
+                                        type="submit"
+                                        className="absolute right-1.5 top-1.5 h-8 w-8 p-0 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center"
+                                        disabled={!chatInput.trim()}
+                                    >
+                                        <SendIcon />
+                                    </Button>
+                                </div>
                             </form>
                         </div>
                     </aside>

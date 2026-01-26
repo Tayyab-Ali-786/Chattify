@@ -8,16 +8,105 @@ export const useWebRTC = (roomId: string, userName: string) => {
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [remoteUserName, setRemoteUserName] = useState<string | null>(null);
-    const [messages, setMessages] = useState<{ from: string; message: string }[]>([]);
-    const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-    const localStreamRef = useRef<MediaStream | null>(null); // Keep ref for immediate access in callbacks
+    // Data Channel & File Sharing Refs
+    const dataChannelRef = useRef<RTCDataChannel | null>(null);
+    const incomingFileMetaRef = useRef<{ name: string; size: number; fileType: string } | null>(null);
+    const incomingFileBufferRef = useRef<ArrayBuffer[]>([]);
+    const receivedSizeRef = useRef(0);
 
-    const createPeerConnection = useCallback(() => {
+    const [messages, setMessages] = useState<{ from: string; message: string; type: 'text' | 'file'; fileUrl?: string; fileName?: string }[]>([]);
+    const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+    const localStreamRef = useRef<MediaStream | null>(null);
+    const candidatesQueue = useRef<RTCIceCandidate[]>([]);
+    const isProcessingQueue = useRef(false);
+
+    const processCandidatesQueue = async () => {
+        if (!peerConnectionRef.current || !peerConnectionRef.current.remoteDescription || isProcessingQueue.current) return;
+
+        isProcessingQueue.current = true;
+        while (candidatesQueue.current.length > 0) {
+            const candidate = candidatesQueue.current.shift();
+            if (candidate) {
+                try {
+                    await peerConnectionRef.current.addIceCandidate(candidate);
+                } catch (e) {
+                    console.error("Error adding ice candidate", e);
+                }
+            }
+        }
+        isProcessingQueue.current = false;
+    };
+
+    const setupDataChannel = (channel: RTCDataChannel) => {
+        channel.onopen = () => {
+            console.log("Data Channel Open");
+        };
+        channel.binaryType = "arraybuffer";
+
+        channel.onmessage = (event) => {
+            const { data } = event;
+
+            if (typeof data === 'string') {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.type === 'file-meta') {
+                        incomingFileMetaRef.current = parsed;
+                        incomingFileBufferRef.current = [];
+                        receivedSizeRef.current = 0;
+                        console.log("Receiving file:", parsed.name);
+                    } else if (parsed.type === 'file-end') {
+                        // Explicit end typically not needed if we count bytes, but good for safety
+                    }
+                } catch (e) {
+                    console.error("Error parsing data channel message", e);
+                }
+            } else if (data instanceof ArrayBuffer) {
+                if (!incomingFileMetaRef.current) return;
+
+                incomingFileBufferRef.current.push(data);
+                receivedSizeRef.current += data.byteLength;
+
+                if (receivedSizeRef.current >= incomingFileMetaRef.current.size) {
+                    const blob = new Blob(incomingFileBufferRef.current, { type: incomingFileMetaRef.current.fileType });
+                    const url = URL.createObjectURL(blob);
+
+                    setMessages((prev) => [
+                        ...prev,
+                        {
+                            from: 'Peer',
+                            message: `Sent a file: ${incomingFileMetaRef.current?.name}`,
+                            type: 'file',
+                            fileUrl: url,
+                            fileName: incomingFileMetaRef.current?.name
+                        }
+                    ]);
+
+                    // Reset
+                    incomingFileMetaRef.current = null;
+                    incomingFileBufferRef.current = [];
+                    receivedSizeRef.current = 0;
+                }
+            }
+        };
+    };
+
+    const createPeerConnection = useCallback((isOfferer: boolean) => {
         const pc = new RTCPeerConnection({
             iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
             ],
         });
+
+        if (isOfferer) {
+            const channel = pc.createDataChannel("files");
+            dataChannelRef.current = channel;
+            setupDataChannel(channel);
+        } else {
+            pc.ondatachannel = (event) => {
+                dataChannelRef.current = event.channel;
+                setupDataChannel(event.channel);
+            };
+        }
 
         pc.onicecandidate = (event) => {
             if (event.candidate && socket) {
@@ -30,7 +119,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
         };
 
         return pc;
-    }, [socket, roomId]);
+    }, [socket, roomId, setupDataChannel]);
 
     useEffect(() => {
         const newSocket = io(SOCKET_URL);
@@ -53,154 +142,225 @@ export const useWebRTC = (roomId: string, userName: string) => {
     }, []);
 
     // Handle Screen Share
+    const isScreenSharingRef = useRef(false);
+
     const toggleScreenShare = async () => {
-        if (!localStream) return;
-        const pc = peerConnectionRef.current;
-
-        const videoTrack = localStream.getVideoTracks()[0];
-
-        // If already screen sharing (you can check label or set a state, simple toggle logic here: if track label contains 'screen' usually)
-        // Actually simpler: 
-        // If we are initiating screen share:
-        if (videoTrack.label.toLowerCase().includes("camera") || videoTrack.label.toLowerCase().includes("video")) { // Heuristic might fail if camera has weird name, better to track state or just try getDisplayMedia
-            try {
-                const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                const screenTrack = screenStream.getVideoTracks()[0];
-
-                if (pc) {
-                    const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-                    if (sender) {
-                        sender.replaceTrack(screenTrack);
-                    }
-                }
-
-                // Stop old track? No, keep it for switching back? Use replaceTrack allows seamless switch
-                // But we need to update local state to show screen share locally
-                const newStream = new MediaStream([screenTrack, localStream.getAudioTracks()[0]]);
-                setLocalStream(newStream);
-                localStreamRef.current = newStream;
-
-                screenTrack.onended = () => {
-                    // User clicked "Stop Sharing" in browser UI
-                    revertToCamera();
-                };
-
-            } catch (err) {
-                console.error("Error starting screen share:", err);
-            }
+        if (isScreenSharingRef.current) {
+            await stopScreenShare();
         } else {
-            revertToCamera();
+            await startScreenShare();
         }
     };
 
-    const revertToCamera = async () => {
+    const startScreenShare = async () => {
         try {
-            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            const cameraTrack = cameraStream.getVideoTracks()[0];
-            const pc = peerConnectionRef.current;
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            const screenTrack = screenStream.getVideoTracks()[0];
 
-            if (pc) {
-                const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+            if (peerConnectionRef.current) {
+                const sender = peerConnectionRef.current.getSenders().find(s => s.track?.kind === 'video');
                 if (sender) {
-                    sender.replaceTrack(cameraTrack);
+                    await sender.replaceTrack(screenTrack);
                 }
             }
 
-            // Stop screen track if it was running? (Handled by browser usually when replaced or stopped explicitly)
-            if (localStreamRef.current) {
-                localStreamRef.current.getVideoTracks().forEach(t => t.stop()); // Stop screen track
-            }
-
-            const newStream = new MediaStream([cameraTrack, cameraStream.getAudioTracks()[0]]); // Use audio from new stream or old? Old audio track is probably fine, but getting fresh user media gets both.
-            // Actually best to keep audio continuous. But let's simple replace entire stream for now.
+            const audioTrack = localStreamRef.current?.getAudioTracks()[0];
+            const newStream = new MediaStream([screenTrack, ...(audioTrack ? [audioTrack] : [])]);
             setLocalStream(newStream);
             localStreamRef.current = newStream;
+            isScreenSharingRef.current = true;
+
+            screenTrack.onended = () => {
+                stopScreenShare();
+            };
+
+        } catch (err) {
+            console.error("Error starting screen share:", err);
+        }
+    };
+
+    const stopScreenShare = async () => {
+        if (!isScreenSharingRef.current) return;
+
+        try {
+            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const cameraTrack = cameraStream.getVideoTracks()[0];
+
+            if (peerConnectionRef.current) {
+                const sender = peerConnectionRef.current.getSenders().find(s => s.track?.kind === 'video');
+                if (sender) {
+                    await sender.replaceTrack(cameraTrack);
+                }
+            }
+
+            // Stop the screen track if it is still running (e.g. manual toggle)
+            if (localStreamRef.current) {
+                localStreamRef.current.getVideoTracks().forEach(track => {
+                    if (track.label.toLowerCase().includes('screen') || track.label.toLowerCase().includes('window')) {
+                        track.stop();
+                    }
+                });
+            }
+
+            const newStream = new MediaStream([cameraTrack, cameraStream.getAudioTracks()[0]]);
+            setLocalStream(newStream);
+            localStreamRef.current = newStream;
+            isScreenSharingRef.current = false;
+
         } catch (err) {
             console.error("Error reverting to camera:", err);
         }
     };
 
 
+    const hasJoined = useRef(false);
+
     useEffect(() => {
-        if (!socket || !roomId || !localStream) return;
+        hasJoined.current = false;
+    }, [roomId]);
 
-        // Join with name
-        socket.emit("join-room", { roomId, userName });
+    useEffect(() => {
+        if (!socket || !roomId) return; // Removed localStream dependency to prevent re-runs on stream switch
 
-        socket.on("user-joined", async ({ id, name }) => {
+        // Wait for local stream to be ready before joining if it's the first time?
+        // Actually we need 'localStream' to add tracks. 
+        // We can check localStreamRef.
+        if (!localStreamRef.current && !localStream) return;
+
+        // Join with name only if not already joined for this room session
+        if (!hasJoined.current) {
+            socket.emit("join-room", { roomId, userName });
+            hasJoined.current = true;
+        }
+
+        const handleUserJoined = async ({ id, name }: { id: string, name: string }) => {
             console.log("User joined:", id, name);
             setRemoteUserName(name || "Unknown User");
-            const pc = createPeerConnection();
+            const pc = createPeerConnection(true);
             peerConnectionRef.current = pc;
 
-            localStream.getTracks().forEach(track => {
-                pc.addTrack(track, localStream);
-            });
+            const streamToAdd = localStreamRef.current || localStream;
+            if (streamToAdd) {
+                streamToAdd.getTracks().forEach(track => {
+                    pc.addTrack(track, streamToAdd);
+                });
+            }
 
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-            socket.emit("offer", { to: id, sdp: offer, userName }); // Send my name with offer
-        });
+            socket.emit("offer", { to: id, sdp: offer, userName });
+        };
 
-        socket.on("offer", async ({ from, sdp, name }) => {
+        const handleOffer = async ({ from, sdp, name }: { from: string, sdp: RTCSessionDescriptionInit, name: string }) => {
             console.log("Received offer from:", from, name);
             setRemoteUserName(name || "Unknown User");
-            const pc = createPeerConnection();
+            const pc = createPeerConnection(false);
             peerConnectionRef.current = pc;
 
-            localStream.getTracks().forEach(track => {
-                pc.addTrack(track, localStream);
-            });
+            const streamToAdd = localStreamRef.current || localStream;
+            if (streamToAdd) {
+                streamToAdd.getTracks().forEach(track => {
+                    pc.addTrack(track, streamToAdd);
+                });
+            }
 
             await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+            await processCandidatesQueue();
+
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             socket.emit("answer", { to: from, sdp: answer });
-        });
+        };
 
-        socket.on("answer", async ({ from, sdp }) => {
+        const handleAnswer = async ({ from, sdp }: { from: string, sdp: RTCSessionDescriptionInit }) => {
             console.log("Received answer from:", from);
             if (peerConnectionRef.current) {
                 await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(sdp));
+                await processCandidatesQueue();
             }
-        });
+        };
 
-        socket.on("candidate", async ({ from, candidate }) => {
-            if (peerConnectionRef.current) {
-                await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        const handleCandidate = async ({ from, candidate }: { from: string, candidate: RTCIceCandidateInit }) => {
+            const iceCandidate = new RTCIceCandidate(candidate);
+            if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
+                try {
+                    await peerConnectionRef.current.addIceCandidate(iceCandidate);
+                } catch (e) {
+                    console.error("Error adding candidate directly", e);
+                }
+            } else {
+                candidatesQueue.current.push(iceCandidate);
             }
-        });
+        };
 
-        socket.on("chat-message", ({ from, message }) => {
-            // Logic to resolve 'from' ID to Name would require a map. 
-            // For now we just use the ID or if we decide to send Name in chat message too.
-            // Let's assume we want to send Name in chat.
-            // Updating sendMessage to include name.
-            setMessages((prev) => [...prev, { from, message }]);
-        });
+        const handleChatMessage = ({ from, message }: { from: string, message: string }) => {
+            setMessages((prev) => [...prev, { from, message, type: 'text' }]);
+        };
+
+        socket.on("user-joined", handleUserJoined);
+        socket.on("offer", handleOffer);
+        socket.on("answer", handleAnswer);
+        socket.on("candidate", handleCandidate);
+        socket.on("chat-message", handleChatMessage);
 
         return () => {
-            socket.off("user-joined");
-            socket.off("offer");
-            socket.off("answer");
-            socket.off("candidate");
-            socket.off("chat-message");
+            socket.off("user-joined", handleUserJoined);
+            socket.off("offer", handleOffer);
+            socket.off("answer", handleAnswer);
+            socket.off("candidate", handleCandidate);
+            socket.off("chat-message", handleChatMessage);
         };
-    }, [socket, roomId, localStream, createPeerConnection, userName]);
+    }, [socket, roomId, createPeerConnection, userName]); // Removed localStream
 
     const sendMessage = (message: string) => {
         if (socket && roomId) {
-            // We'll update server to pass through whatever object we send?
-            // Server currently: socket.on("chat-message", ({ to, message }) => { io.to(to).emit("chat-message", { from: socket.id, message }); });
-            // It overrwrites 'from'.
-            // So we can send the name INSIDE the message object string? OR we update server. 
-            // Let's just append name to message string for now for simplicity or rely on local state?
-            // Actually, let's just send "Name: Message" as the string? Quickest fix without server change for chat specific structure.
             const msgContent = `${userName}: ${message}`;
             socket.emit("chat-message", { to: roomId, message: msgContent });
-            setMessages((prev) => [...prev, { from: 'me', message: msgContent }]); // We'll parse it or display as is.
+            setMessages((prev) => [...prev, { from: 'me', message: msgContent, type: 'text' }]);
         }
     };
 
-    return { localStream, remoteStream, messages, sendMessage, remoteUserName, toggleScreenShare };
+    const sendFile = (file: File) => {
+        if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
+            alert("Connection not established with peer. Cannot send file.");
+            return;
+        }
+
+        const metadata = {
+            type: 'file-meta',
+            name: file.name,
+            size: file.size,
+            fileType: file.type
+        };
+
+        try {
+            dataChannelRef.current.send(JSON.stringify(metadata));
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (reader.result instanceof ArrayBuffer) {
+                    dataChannelRef.current?.send(reader.result);
+
+                    // Optimistic update for sender
+                    const url = URL.createObjectURL(file);
+                    setMessages((prev) => [
+                        ...prev,
+                        {
+                            from: 'me',
+                            message: `Sent a file: ${file.name}`,
+                            type: 'file',
+                            fileUrl: url,
+                            fileName: file.name
+                        }
+                    ]);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        } catch (error) {
+            console.error("Error sending file:", error);
+            alert("Failed to send file.");
+        }
+    };
+
+    return { localStream, remoteStream, messages, sendMessage, sendFile, remoteUserName, toggleScreenShare };
 };
