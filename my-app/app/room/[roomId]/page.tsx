@@ -13,6 +13,8 @@ const LogOutIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" heig
 const SendIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>;
 const PaperclipIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>;
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
+const PenIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="M2 2l7.586 7.586" /><circle cx="11" cy="11" r="2" /></svg>;
+const TrashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>;
 
 export default function Room() {
     const params = useParams();
@@ -21,14 +23,20 @@ export default function Room() {
     const userName = searchParams.get('name') || "Anonymous";
     const router = useRouter();
 
-    const { localStream, remoteStream, messages, sendMessage, sendFile, remoteUserName, toggleScreenShare } = useWebRTC(roomId, userName);
+    const { localStream, remoteStream, messages, sendMessage, sendFile, remoteUserName, toggleScreenShare, sendDrawing, remoteDrawingData, sendWhiteboardToggle, remoteWhiteboardOpen } = useWebRTC(roomId, userName);
     const [chatInput, setChatInput] = useState("");
     const [isSidebarOpen] = useState(true);
+    const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
+    const [drawColor, setDrawColor] = useState("#000000");
+    const [lineWidth, setLineWidth] = useState(2);
+    const [isDrawing, setIsDrawing] = useState(false);
 
     const localVideoRef = useRef<HTMLVideoElement>(null);
     const remoteVideoRef = useRef<HTMLVideoElement>(null);
     const chatScrollRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
     const handleFileClick = () => {
         fileInputRef.current?.click();
@@ -57,6 +65,26 @@ export default function Room() {
         }
     }, [localStream]);
 
+    // Sync Whiteboard State
+    useEffect(() => {
+        if (remoteWhiteboardOpen && !isWhiteboardOpen) {
+            setIsWhiteboardOpen(true);
+        }
+    }, [remoteWhiteboardOpen]);
+
+    // Auto-open if receiving drawing data (failsafe)
+    useEffect(() => {
+        if (remoteDrawingData && !isWhiteboardOpen) {
+            setIsWhiteboardOpen(true);
+        }
+    }, [remoteDrawingData]);
+
+    const toggleWhiteboard = () => {
+        const newState = !isWhiteboardOpen;
+        setIsWhiteboardOpen(newState);
+        sendWhiteboardToggle(newState);
+    };
+
     useEffect(() => {
         if (remoteVideoRef.current && remoteStream) {
             remoteVideoRef.current.srcObject = remoteStream;
@@ -74,6 +102,87 @@ export default function Room() {
             setChatInput("");
         }
     };
+
+    // Whiteboard Drawing Logic
+    const drawLine = (ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, color: string, width: number) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+    };
+
+    const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        setIsDrawing(true);
+        lastPointRef.current = { x, y };
+    };
+
+    const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+        if (!isDrawing || !canvasRef.current || !lastPointRef.current) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Draw locally
+        drawLine(ctx, lastPointRef.current.x, lastPointRef.current.y, x, y, drawColor, lineWidth);
+
+        // Send to remote peer (normalized coordinates)
+        sendDrawing({
+            x: x / canvas.width,
+            y: y / canvas.height,
+            color: drawColor,
+            lineWidth: lineWidth,
+            isDrawing: true
+        });
+
+        lastPointRef.current = { x, y };
+    };
+
+    const handleCanvasMouseUp = () => {
+        setIsDrawing(false);
+        lastPointRef.current = null;
+    };
+
+    const clearCanvas = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+
+    // Handle remote drawing data
+    useEffect(() => {
+        if (!remoteDrawingData || !canvasRef.current) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const x = remoteDrawingData.x * canvas.width;
+        const y = remoteDrawingData.y * canvas.height;
+
+        if (remoteDrawingData.isDrawing && lastPointRef.current) {
+            drawLine(ctx, lastPointRef.current.x, lastPointRef.current.y, x, y, remoteDrawingData.color, remoteDrawingData.lineWidth);
+        }
+
+        lastPointRef.current = { x, y };
+    }, [remoteDrawingData]);
 
     return (
         <div className="flex flex-col h-screen bg-gray-950 text-white overflow-hidden font-sans">
@@ -156,9 +265,79 @@ export default function Room() {
                                 <MonitorIcon />
                                 <span className="hidden sm:inline">Share Screen</span>
                             </Button>
+                            <div className="w-px bg-gray-700 mx-1"></div>
+                            <Button
+                                className={`rounded-xl h-12 px-4 gap-2 ${isWhiteboardOpen ? 'bg-purple-600/20 text-purple-300' : 'hover:bg-purple-600/20 text-purple-400 hover:text-purple-300'}`}
+                                onClick={toggleWhiteboard}
+                            >
+                                <PenIcon />
+                                <span className="hidden sm:inline">Whiteboard</span>
+                            </Button>
                         </div>
                     </div>
                 </main>
+
+                {/* Whiteboard Panel */}
+                {isWhiteboardOpen && (
+                    <aside className="w-96 bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-300">
+                        <div className="p-4 border-b border-gray-800 font-semibold flex justify-between items-center">
+                            Whiteboard
+                            <span className="text-xs bg-purple-600/20 text-purple-400 px-2 py-1 rounded">Live</span>
+                        </div>
+                        <div className="flex-1 p-4 flex flex-col gap-4">
+                            <canvas
+                                ref={canvasRef}
+                                width={800}
+                                height={600}
+                                className="w-full bg-white rounded-lg cursor-crosshair border-2 border-gray-700 shadow-lg"
+                                onMouseDown={handleCanvasMouseDown}
+                                onMouseMove={handleCanvasMouseMove}
+                                onMouseUp={handleCanvasMouseUp}
+                                onMouseLeave={handleCanvasMouseUp}
+                            />
+                            <div className="flex flex-col gap-3 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                                <div className="flex items-center gap-3">
+                                    <label className="text-sm text-gray-400 font-medium">Color:</label>
+                                    <input
+                                        type="color"
+                                        value={drawColor}
+                                        onChange={(e) => setDrawColor(e.target.value)}
+                                        className="w-12 h-8 rounded cursor-pointer border border-gray-600"
+                                    />
+                                    <div className="flex gap-2 ml-auto">
+                                        {['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00'].map(color => (
+                                            <button
+                                                key={color}
+                                                onClick={() => setDrawColor(color)}
+                                                className="w-6 h-6 rounded-full border-2 border-gray-600 hover:scale-110 transition-transform"
+                                                style={{ backgroundColor: color }}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <label className="text-sm text-gray-400 font-medium">Width:</label>
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="10"
+                                        value={lineWidth}
+                                        onChange={(e) => setLineWidth(Number(e.target.value))}
+                                        className="flex-1"
+                                    />
+                                    <span className="text-sm text-gray-400 w-8">{lineWidth}px</span>
+                                </div>
+                                <Button
+                                    onClick={clearCanvas}
+                                    className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 gap-2 rounded-lg"
+                                >
+                                    <TrashIcon /> Clear Canvas
+                                </Button>
+                            </div>
+                        </div>
+                    </aside>
+                )}
+
 
                 {/* Chat Sidebar */}
                 {isSidebarOpen && (

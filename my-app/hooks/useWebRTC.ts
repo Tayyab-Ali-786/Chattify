@@ -3,6 +3,14 @@ import { io, Socket } from "socket.io-client";
 
 const SOCKET_URL = "http://localhost:3001";
 
+export type DrawingData = {
+    x: number;
+    y: number;
+    color: string;
+    lineWidth: number;
+    isDrawing: boolean;
+};
+
 export const useWebRTC = (roomId: string, userName: string) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -15,6 +23,8 @@ export const useWebRTC = (roomId: string, userName: string) => {
     const receivedSizeRef = useRef(0);
 
     const [messages, setMessages] = useState<{ from: string; message: string; type: 'text' | 'file'; fileUrl?: string; fileName?: string }[]>([]);
+    const [remoteDrawingData, setRemoteDrawingData] = useState<DrawingData | null>(null);
+    const [remoteWhiteboardOpen, setRemoteWhiteboardOpen] = useState(false);
     const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
     const localStreamRef = useRef<MediaStream | null>(null);
     const candidatesQueue = useRef<RTCIceCandidate[]>([]);
@@ -53,20 +63,38 @@ export const useWebRTC = (roomId: string, userName: string) => {
                         incomingFileMetaRef.current = parsed;
                         incomingFileBufferRef.current = [];
                         receivedSizeRef.current = 0;
-                        console.log("Receiving file:", parsed.name);
+                        console.log("Receiving file:", parsed.name, "Size:", parsed.size, "bytes");
                     } else if (parsed.type === 'file-end') {
-                        // Explicit end typically not needed if we count bytes, but good for safety
+                        console.log("Received file-end signal");
+                        // File should already be complete based on size check
+                    } else if (parsed.type === 'drawing-data') {
+                        // Handle drawing data from remote peer
+                        setRemoteDrawingData({
+                            x: parsed.x,
+                            y: parsed.y,
+                            color: parsed.color,
+                            lineWidth: parsed.lineWidth,
+                            isDrawing: parsed.isDrawing
+                        });
+                    } else if (parsed.type === 'whiteboard-toggle') {
+                        setRemoteWhiteboardOpen(parsed.isOpen);
+                        console.log("Remote whiteboard toggled:", parsed.isOpen);
                     }
                 } catch (e) {
                     console.error("Error parsing data channel message", e);
                 }
             } else if (data instanceof ArrayBuffer) {
-                if (!incomingFileMetaRef.current) return;
+                if (!incomingFileMetaRef.current) {
+                    console.warn("Received file data without metadata");
+                    return;
+                }
 
                 incomingFileBufferRef.current.push(data);
                 receivedSizeRef.current += data.byteLength;
+                console.log(`Received chunk: ${receivedSizeRef.current}/${incomingFileMetaRef.current.size} bytes`);
 
                 if (receivedSizeRef.current >= incomingFileMetaRef.current.size) {
+                    console.log("File reception complete, creating blob");
                     const blob = new Blob(incomingFileBufferRef.current, { type: incomingFileMetaRef.current.fileType });
                     const url = URL.createObjectURL(blob);
 
@@ -80,6 +108,8 @@ export const useWebRTC = (roomId: string, userName: string) => {
                             fileName: incomingFileMetaRef.current?.name
                         }
                     ]);
+
+                    console.log("File added to messages:", incomingFileMetaRef.current.name);
 
                     // Reset
                     incomingFileMetaRef.current = null;
@@ -326,6 +356,7 @@ export const useWebRTC = (roomId: string, userName: string) => {
             return;
         }
 
+        const CHUNK_SIZE = 16384; // 16KB chunks
         const metadata = {
             type: 'file-meta',
             name: file.name,
@@ -334,33 +365,95 @@ export const useWebRTC = (roomId: string, userName: string) => {
         };
 
         try {
+            // Send metadata first
             dataChannelRef.current.send(JSON.stringify(metadata));
+            console.log("Sending file metadata:", metadata);
 
+            // Read and send file in chunks
+            let offset = 0;
             const reader = new FileReader();
-            reader.onload = () => {
-                if (reader.result instanceof ArrayBuffer) {
-                    dataChannelRef.current?.send(reader.result);
 
-                    // Optimistic update for sender
-                    const url = URL.createObjectURL(file);
-                    setMessages((prev) => [
-                        ...prev,
-                        {
-                            from: 'me',
-                            message: `Sent a file: ${file.name}`,
-                            type: 'file',
-                            fileUrl: url,
-                            fileName: file.name
+            const readSlice = () => {
+                const slice = file.slice(offset, offset + CHUNK_SIZE);
+                reader.readAsArrayBuffer(slice);
+            };
+
+            reader.onload = () => {
+                if (reader.result instanceof ArrayBuffer && dataChannelRef.current) {
+                    try {
+                        dataChannelRef.current.send(reader.result);
+                        offset += reader.result.byteLength;
+                        console.log(`Sent chunk: ${offset}/${file.size} bytes`);
+
+                        if (offset < file.size) {
+                            // Read next chunk
+                            readSlice();
+                        } else {
+                            // File transfer complete
+                            console.log("File transfer complete");
+
+                            // Send end signal
+                            dataChannelRef.current.send(JSON.stringify({ type: 'file-end' }));
+
+                            // Optimistic update for sender
+                            const url = URL.createObjectURL(file);
+                            setMessages((prev) => [
+                                ...prev,
+                                {
+                                    from: 'me',
+                                    message: `Sent a file: ${file.name}`,
+                                    type: 'file',
+                                    fileUrl: url,
+                                    fileName: file.name
+                                }
+                            ]);
                         }
-                    ]);
+                    } catch (error) {
+                        console.error("Error sending chunk:", error);
+                        alert("Failed to send file chunk.");
+                    }
                 }
             };
-            reader.readAsArrayBuffer(file);
+
+            reader.onerror = (error) => {
+                console.error("Error reading file:", error);
+                alert("Failed to read file.");
+            };
+
+            // Start reading the first chunk
+            readSlice();
         } catch (error) {
             console.error("Error sending file:", error);
             alert("Failed to send file.");
         }
     };
 
-    return { localStream, remoteStream, messages, sendMessage, sendFile, remoteUserName, toggleScreenShare };
+    const sendDrawing = (drawingData: DrawingData) => {
+        if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
+            return;
+        }
+
+        try {
+            const message = {
+                type: 'drawing-data',
+                ...drawingData
+            };
+            dataChannelRef.current.send(JSON.stringify(message));
+        } catch (error) {
+            console.error("Error sending drawing data:", error);
+        }
+    };
+
+    const sendWhiteboardToggle = (isOpen: boolean) => {
+        if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') {
+            return;
+        }
+        try {
+            dataChannelRef.current.send(JSON.stringify({ type: 'whiteboard-toggle', isOpen }));
+        } catch (error) {
+            console.error("Error sending whiteboard toggle:", error);
+        }
+    };
+
+    return { localStream, remoteStream, messages, sendMessage, sendFile, remoteUserName, toggleScreenShare, sendDrawing, remoteDrawingData, sendWhiteboardToggle, remoteWhiteboardOpen };
 };
