@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, useSession, signOut } from "next-auth/react";
+import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -15,7 +15,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { user, loading: authLoading, signin, signup, signout } = useAuth();
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,16 +23,15 @@ export default function Home() {
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        name: isSignUp ? name : undefined,
-        isSignUp: isSignUp.toString(),
-        redirect: false
-      });
+      let result;
+      if (isSignUp) {
+        result = await signup(email, password, name);
+      } else {
+        result = await signin(email, password);
+      }
 
-      if (result?.error) {
-        setError(result.error);
+      if (!result.success) {
+        setError(result.error || "Authentication failed");
       } else {
         setEmail("");
         setPassword("");
@@ -46,16 +45,16 @@ export default function Home() {
   };
 
   const handleJoin = () => {
-    if (roomId.trim() && session?.user) {
+    if (roomId.trim() && user) {
       router.push(`/room/${roomId}`);
     }
   };
 
   const handleLogout = async () => {
-    await signOut({ redirect: false });
+    await signout();
   };
 
-  if (status === "loading") {
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-950 via-purple-950 to-pink-950 text-white">
         <div className="text-center">
@@ -88,7 +87,7 @@ export default function Home() {
           <p className="text-cyan-200/80 text-sm font-medium">Premium Video Conferencing & Collaboration</p>
         </div>
 
-        {!session ? (
+        {!user ? (
           // Login/Signup Form
           <form onSubmit={handleAuth} className="space-y-5">
             {isSignUp && (
@@ -171,13 +170,13 @@ export default function Home() {
             <div className="p-4 bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border-2 border-cyan-400/30 rounded-xl backdrop-blur-sm">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-purple-400 rounded-full flex items-center justify-center text-white font-bold">
-                  {session.user?.name?.charAt(0).toUpperCase()}
+                  {user?.name?.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <p className="text-cyan-100 text-sm font-bold">
-                    Welcome back, {session.user?.name}!
+                    Welcome back, {user?.name}!
                   </p>
-                  <p className="text-purple-200/70 text-xs">{session.user?.email}</p>
+                  <p className="text-purple-200/70 text-xs">{user?.email}</p>
                 </div>
               </div>
             </div>
