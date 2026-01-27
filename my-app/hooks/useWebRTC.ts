@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import { generateKeyPair, exportPublicKey, importPublicKey, deriveSharedSecret, encrypt, decrypt, encryptBinary, decryptBinary } from "@/lib/encryption";
 
-const SOCKET_URL = "http://localhost:3001";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
 
 export type DrawingData = {
     x: number;

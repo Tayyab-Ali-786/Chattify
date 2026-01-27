@@ -6,9 +6,18 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
+
+// CORS Configuration - Allow both local and deployed frontend
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://chattify-seven.vercel.app"
+];
+
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -51,4 +60,5 @@ io.on("connection", socket => {
   });
 });
 
-server.listen(3001, () => console.log("Signaling server running on :3001"));
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => console.log(`Signaling server running on :${PORT}`));
